@@ -1,4 +1,4 @@
-# Security log read access requires elevated tokens. Restarting the process with Administrator privileges
+# Security log access requires elevated tokens. Restarting the process with Administrator privileges
 # prevents silent failures during event subscription initialization.
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -17,18 +17,17 @@ function global:Write-Alert {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $formatted = "[$timestamp] [$Category] $Message"
     
-    # Console output uses direct .NET calls to ensure it prints from background runspaces
+    # Action blocks execute in separate background runspaces. Write-Host often fails to render 
+    # across runspace boundaries, so direct .NET console methods are necessary.
     [Console]::ForegroundColor = $Color
     [Console]::WriteLine($formatted)
     [Console]::ResetColor()
     
-    # Persistent log maintains historical record across script restarts
     Add-Content -Path $global:LogFile -Value $formatted
 }
 
 Write-Alert "SYSTEM" "Event Log Watcher initialized. Subscribing to kernel interrupts..." "Cyan"
 
-# Region: System Events (Errors, Critical, Kernel-Power)
 # Polling Get-WinEvent burns CPU cycles. Using EventLogWatcher registers an asynchronous callback 
 # with the OS eventing subsystem, allowing the thread to idle until an interrupt occurs.
 $systemQueryStr = "*[System[(Level=1 or Level=2) or Provider[@Name='Microsoft-Windows-Kernel-Power']]]"
@@ -50,10 +49,9 @@ Register-ObjectEvent -InputObject $systemWatcher -EventName 'EventRecordWritten'
 } | Out-Null
 $systemWatcher.Enabled = $true
 
-# Region: Process Creation (System Internals)
-# Since Logon events require Audit Policies to be enabled (and a password to actually 'lock' the session), 
-# we will monitor Process Creation instead. WMI __InstanceCreationEvent fires asynchronously when 
-# the OS kernel allocates a new Win32_Process.
+# Logon events require Audit Policies to be enabled and a password to actually lock the session. 
+# Monitoring Win32_Process instantiation via __InstanceCreationEvent provides a highly reliable 
+# asynchronous trigger without depending on local security policy configurations.
 $processQuery = "SELECT * FROM __InstanceCreationEvent WITHIN 1 WHERE TargetInstance ISA 'Win32_Process'"
 Register-WmiEvent -Query $processQuery -SourceIdentifier 'ProcessMonitor' -Action {
     try {
@@ -61,7 +59,7 @@ Register-WmiEvent -Query $processQuery -SourceIdentifier 'ProcessMonitor' -Actio
         $name = $process.Name
         $processId = $process.ProcessId
         
-        # Filtering out extreme background noise to make user-launched processes visible
+        # Filtering out svchost and conhost prevents the console from being flooded with routine OS background noise.
         if ($name -notmatch "svchost|conhost|WmiPrvSE|taskeng|backgroundTaskHost|RuntimeBroker") {
             Write-Alert "SYSTEM_PROCESS" "Process Created | PID: $processId | Name: $name" "Yellow"
         }
@@ -70,14 +68,13 @@ Register-WmiEvent -Query $processQuery -SourceIdentifier 'ProcessMonitor' -Actio
     }
 } | Out-Null
 
-# Region: USB Storage Plug/Unplug
-# Win32_VolumeChangeEvent only fires for storage drives. Win32_DeviceChangeEvent fires for ALL 
-# peripherals (mice, keyboards, phones, etc.) making it much more robust for general hardware detection.
+# Win32_VolumeChangeEvent only fires for storage drives. Win32_DeviceChangeEvent fires for all 
+# peripherals on the bus, making it robust for general hardware state change detection.
 Register-WmiEvent -Class Win32_DeviceChangeEvent -SourceIdentifier 'USBMonitor' -Action {
     try {
         $event = $Event.SourceEventArgs.NewEvent
         
-        # EventType 2 is Arrival (Inserted), 3 is Removal (Ejected)
+        # EventType 2 maps to Arrival and 3 maps to Removal in the DeviceChangeEvent schema.
         if ($event.EventType -eq 2 -or $event.EventType -eq 3) {
             $action = if ($event.EventType -eq 2) { "INSERTED" } else { "REMOVED" }
             $color = if ($action -eq "INSERTED") { "Green" } else { "DarkGray" }
