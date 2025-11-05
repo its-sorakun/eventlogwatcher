@@ -15,10 +15,22 @@ This project exists to explore how to hook directly into the lower-level OS even
 3. **Process Instantiation (WMI Instance Creation)**
    By hooking `__InstanceCreationEvent` for `Win32_Process`, we intercept the exact moment the Windows kernel allocates a new process in memory, capturing its PID and Name instantly.
 
+## Background Persistence
+
+Rather than compiling a custom C++ executable to run as a Windows Service, this project includes a persistence script (`register_autostart.ps1`) that hooks the script directly into the Windows Task Scheduler. 
+
+It registers an invisible task that executes at system boot under `NT AUTHORITY\SYSTEM`. This guarantees maximum privileges to hook ETW/WMI interrupts and ensures the watcher loop runs indefinitely, completely bypassing the user session boundary.
+
 ## Usage
 
-The script requires an elevated administrative token to bind to these kernel and security subsystems.
-
+**Interactive Mode (Testing):**
+Requires an elevated administrative token to bind to kernel and security subsystems.
 ```powershell
 .\watcher.ps1
+```
+
+**Background Service (Persistent):**
+Registers the invisible SYSTEM task to run automatically on boot. Requires Administrator privileges.
+```powershell
+.\register_autostart.ps1
 ```
