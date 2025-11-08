@@ -30,20 +30,23 @@ int main()
     else
     {
         HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-        cout << "Success" << endl;
+        // cout << "Success" << endl;
 
         // hook the event to the registry
-        // source: https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regnotifychangekeyvalue
-        RegNotifyChangeKeyValue(hkey, TRUE, REG_NOTIFY_CHANGE_LAST_SET, hEvent, TRUE);
-        cout << "waiting for the registry modification" << endl;
+        while (true)
+        {
+            // source: https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regnotifychangekeyvalue
+            RegNotifyChangeKeyValue(hkey, TRUE, REG_NOTIFY_CHANGE_LAST_SET, hEvent, TRUE);
+            cout << "waiting for the registry modification" << endl;
 
-        // set the trap(thread goes to sleep)
-        WaitForSingleObject(hEvent, INFINITE);
-        cout << "registry modified" << endl;
+            // set the trap(thread goes to sleep)
+            WaitForSingleObject(hEvent, INFINITE);
+            cout << "registry modified" << endl;
 
-        // clean up the handles
-        CloseHandle(hEvent);
-        RegCloseKey(hkey);
+            // clean up the handles
+            CloseHandle(hEvent);
+            RegCloseKey(hkey);
+        }
     }
 
     // system("PAUSE");
