@@ -15,6 +15,9 @@ This project exists to explore how to hook directly into the lower-level OS even
 3. **Process Instantiation (WMI Instance Creation)**
    By hooking `__InstanceCreationEvent` for `Win32_Process`, we intercept the exact moment the Windows kernel allocates a new process in memory, capturing its PID and Name instantly.
 
+4. **Registry Persistence Hooks (Native Win32 C++)**
+   While WMI handles high-level events well, dropping down to native C++ exposes how the kernel actually triggers these notifications. Using `RegNotifyChangeKeyValue`, the program links an OS event object directly to the Configuration Manager for a specific hive (e.g., the `Run` persistence key). The thread is then entirely suspended using `WaitForSingleObject`, sitting at 0% CPU until the kernel explicitly wakes it up upon a registry modification.
+
 ## Background Persistence
 
 Rather than compiling a custom C++ executable to run as a Windows Service, this project includes a persistence script (`register_autostart.ps1`) that hooks the script directly into the Windows Task Scheduler. 
