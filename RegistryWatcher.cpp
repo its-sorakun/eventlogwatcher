@@ -34,22 +34,25 @@ int main()
         cout << "Error opening the key" << endl;
         return 1;
     }
-    else
+    HANDLE hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    if (hEvent == NULL)
     {
-        HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-        
-        while (true)
-        {
-            pRegNotifyChangeKeyValue(hkey, TRUE, REG_NOTIFY_CHANGE_LAST_SET, hEvent, TRUE);
-            cout << "waiting for the registry modification" << endl;
-
-            WaitForSingleObject(hEvent, INFINITE);
-            cout << "registry modified" << endl;
-
-            CloseHandle(hEvent);
-            pRegCloseKey(hkey);
-        }
+        cout << "Error creating event" << endl;
+        pRegCloseKey(hkey);
+        return 1;
     }
+    
+    while (true)
+    {
+        pRegNotifyChangeKeyValue(hkey, TRUE, REG_NOTIFY_CHANGE_LAST_SET, hEvent, TRUE);
+        cout << "waiting for the registry modification" << endl;
+
+        WaitForSingleObject(hEvent, INFINITE);
+        cout << "registry modified" << endl;
+    }
+
+    CloseHandle(hEvent);
+    pRegCloseKey(hkey);
 
     return 0;
 }
