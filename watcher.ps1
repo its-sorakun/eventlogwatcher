@@ -86,6 +86,31 @@ Register-WmiEvent -Class Win32_DeviceChangeEvent -SourceIdentifier 'USBMonitor' 
     }
 } | Out-Null
 
+$registryWatcherExe = Join-Path $PSScriptRoot "RegistryWatcher.exe"
+if (Test-Path $registryWatcherExe) {
+    # Spawning the native executable and intercepting its stdout via anonymous pipes 
+    # allows the C++ kernel hook to feed directly into the unified PowerShell logging system.
+    $procInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $procInfo.FileName = $registryWatcherExe
+    $procInfo.RedirectStandardOutput = $true
+    $procInfo.UseShellExecute = $false
+    $procInfo.CreateNoWindow = $true
+
+    $global:registryProcess = New-Object System.Diagnostics.Process
+    $global:registryProcess.StartInfo = $procInfo
+    $global:registryProcess.EnableRaisingEvents = $true
+
+    Register-ObjectEvent -InputObject $global:registryProcess -EventName "OutputDataReceived" -SourceIdentifier "RegistryMonitor" -Action {
+        $output = $Event.SourceEventArgs.Data
+        if (-not [string]::IsNullOrWhiteSpace($output) -and $output -match "registry modified") {
+            Write-Alert "REGISTRY_EVENT" "Action: MODIFIED | Persistence mechanisms altered in HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" "Magenta"
+        }
+    } | Out-Null
+
+    $global:registryProcess.Start() | Out-Null
+    $global:registryProcess.BeginOutputReadLine()
+}
+
 Write-Alert "SYSTEM" "Subscriptions active. Listening for events. Press Ctrl+C to exit." "Cyan"
 
 # Keeping the runspace alive is required to process the asynchronous callbacks.
@@ -100,5 +125,13 @@ finally {
     Unregister-Event -SourceIdentifier 'SystemEvents' -ErrorAction SilentlyContinue
     Unregister-Event -SourceIdentifier 'ProcessMonitor' -ErrorAction SilentlyContinue
     Unregister-Event -SourceIdentifier 'USBMonitor' -ErrorAction SilentlyContinue
+    Unregister-Event -SourceIdentifier 'RegistryMonitor' -ErrorAction SilentlyContinue
+    
     if ($systemWatcher) { $systemWatcher.Dispose() }
+    
+    # Cleanly terminate the native C++ subprocess if it's still running.
+    if ($global:registryProcess -and -not $global:registryProcess.HasExited) {
+        $global:registryProcess.Kill()
+        $global:registryProcess.Dispose()
+    }
 }
