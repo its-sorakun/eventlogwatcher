@@ -12,7 +12,7 @@ typedef LSTATUS (WINAPI *PRegCloseKey)(HKEY);
 int main()
 {
     // check if Advapi32.dll exists or not(most probably it will if running on Windows 2000 professional or later)
-    HMODULE hAdvApi = LoadLibrary(L"Advapi32.dll");
+    HMODULE hAdvApi = LoadLibraryW(L"Advapi32.dll");
     if (hAdvApi == NULL)
     {
         cout << "Advapi32.dll not found" << endl;
