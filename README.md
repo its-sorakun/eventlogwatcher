@@ -18,6 +18,24 @@ This project exists to explore how to hook directly into the lower-level OS even
 4. **Registry Persistence Hooks (Native Win32 C++)**
    While WMI handles high-level events well, dropping down to native C++ exposes how the kernel actually triggers these notifications. Using `RegNotifyChangeKeyValue`, the program links an OS event object directly to the Configuration Manager for a specific hive (e.g., the `Run` persistence key). The thread is then entirely suspended using `WaitForSingleObject`, sitting at 0% CPU until the kernel explicitly wakes it up upon a registry modification.
 
+## Native Registry Monitoring (Optional)
+
+The core `watcher.ps1` script can optionally integrate with a native C++ executable to monitor registry persistence keys (e.g., Run keys) using `RegNotifyChangeKeyValue` without polling. 
+
+If compiled, the PowerShell script spawns the executable as a hidden child process and intercepts its standard output via anonymous pipes, unifying all alerts into the central logging system.
+
+To enable this, compile `RegistryWatcher.cpp` using your preferred C++ compiler:
+
+**Using MinGW (g++):**
+```powershell
+g++ -o RegistryWatcher.exe RegistryWatcher.cpp
+```
+
+**Using MSVC (cl.exe):**
+```powershell
+cl.exe /EHsc RegistryWatcher.cpp
+```
+
 ## Background Persistence
 
 Rather than compiling a custom C++ executable to run as a Windows Service, this project includes a persistence script (`register_autostart.ps1`) that hooks the script directly into the Windows Task Scheduler. 
